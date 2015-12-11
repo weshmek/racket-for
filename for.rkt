@@ -431,3 +431,28 @@ c
           (printf "~a ~a~n" book chapter))
 
 ;;Reason cond works instead of if: If doesn't have an implicit local definitions block. Cond does.
+
+(define-syntax (my-for* stx)
+  (define lst (syntax->list stx))
+  (define empty '())
+  (define empty? (lambda (x) (equal? x empty)))
+  (define symbol-equal? (lambda (A x) (equal? A (syntax->datum x))))
+  (define first car)
+  (define rest cdr)
+  (define assigns (syntax->list (first (rest lst))))
+  (define bodies (rest (rest lst)))
+  
+  (cond
+   [(empty? assigns) #`(begin #,@bodies)]
+   [(or (symbol-equal? '#:unless (first assigns)) (symbol-equal?  '#:when (first assigns))) #`(my-for-2 (#,(first assigns) #,(first (rest assigns))) (my-for* #,(rest (rest assigns)) #,@bodies))]
+   [else #`(my-for-2 (#,(first assigns)) (my-for* #,(rest assigns) #,@bodies))]))
+ 
+(for* ([i '(a b c)] [j '(d e f)])
+  (printf "~a ~a~n" i j))
+
+(my-for* ([book '("Guide" "Reference" "Other" "Biblio")] #:unless (equal? book "Other") [chapter '("Intro" "Conclusions")])
+          (printf "~a ~a~n" book chapter))
+
+(my-for* ([i '(1 2 3)] [j '(15 7 19)] [k '(9 14 25)] #:when (< (+ i j k) 20)) 
+         (printf "~a~n" (* i j k)))
+
