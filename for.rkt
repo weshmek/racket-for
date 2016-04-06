@@ -402,7 +402,8 @@ c
                     #`(cond [#,(first (rest (first (rest ass-list)))) (my-for-2 #,(rest (rest (first (rest ass-list)))) #,@bodies)]
                           [else (void)])
                     (error)))
-            (let* ([names-exprs (map syntax->list (first ass-list))]
+            (let* ([f (generate-temporaries '(f))]
+                   [names-exprs (map syntax->list (first ass-list))]
                    [temp-names (generate-temporaries names-exprs)]
                    [tests (map (lambda (name) #`((equal? '() #,name) (void))) temp-names)]
                    [names-temps (map (lambda (x y) (cons (first x) (cons y empty))) names-exprs temp-names)] 
@@ -410,15 +411,15 @@ c
                    [assigns (map (lambda (x) #`[#,(car x) (car #,(car (cdr x)))]) names-temps)]
                    [rests (map (lambda (x) #`(cdr #,x)) temp-names)])
               #`(begin
-                  (define (f #,@temp-names)
+                  (define (#,f #,@temp-names)
                     (cond 
                       #,@tests
                       [else 
-                       (begin (let           #,assigns
-                                (my-for-2 #,(first (rest ass-list))
-                                          #,@bodies))
-                              (f #,@rests))]))
-                  (f #,@lists)))))))
+                       (let           #,assigns
+                         (my-for-2 #,(first (rest ass-list))
+                                   #,@bodies))
+                       (#,f #,@rests)]))
+                  (#,f #,@lists)))))))
 
 (my-for-2 ([i '(a b c)] [j '(d e f)])
          (printf "~a ~a~n" i j))
@@ -455,4 +456,3 @@ c
 
 (my-for* ([i '(1 2 3)] [j '(15 7 19)] [k '(9 14 25)] #:when (< (+ i j k) 20)) 
          (printf "~a~n" (* i j k)))
-
