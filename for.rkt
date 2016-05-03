@@ -405,10 +405,10 @@ c
                         [else (my-for-2 #,(rest (rest (first (rest ass-list)))) #,@bodies)])
                 (if (symbol-equal? '#:when (first (first (rest ass-list))))
                     #`(cond [#,(first (rest (first (rest ass-list)))) (my-for-2 #,(rest (rest (first (rest ass-list)))) #,@bodies)]
-                            [else (void)])
-                    
-                    (error "Bad Syntax" (first (first (rest ass-list))))))
-            (let* ([names-exprs (map syntax->list (first ass-list))]
+                          [else (void)])
+                    (error)))
+            (let* ([f (generate-temporaries '(f))]
+                   [names-exprs (map syntax->list (first ass-list))]
                    [temp-names (generate-temporaries names-exprs)]
                    [tests (map (lambda (name) #`((equal? '() #,name) (void))) temp-names)]
                    [names-temps (map (lambda (x y) (cons (first x) (cons y empty))) names-exprs temp-names)] 
@@ -416,15 +416,15 @@ c
                    [assigns (map (lambda (x) #`[#,(car x) (car #,(car (cdr x)))]) names-temps)]
                    [rests (map (lambda (x) #`(cdr #,x)) temp-names)])
               #`(begin
-                  (define (f #,@temp-names)
+                  (define (#,f #,@temp-names)
                     (cond 
                       #,@tests
                       [else 
-                       (begin (let           #,assigns
-                                (my-for-2 #,(first (rest ass-list))
-                                          #,@bodies))
-                              (f #,@rests))]))
-                  (f #,@lists)))))))
+                       (let           #,assigns
+                         (my-for-2 #,(first (rest ass-list))
+                                   #,@bodies))
+                       (#,f #,@rests)]))
+                  (#,f #,@lists)))))))
 
 #;(define-syntax (my-for-3 stx)
     #`(call/cc #,(my-for-2 (cdr (syntax->list stx)))))
@@ -470,7 +470,6 @@ c
 
 (my-for* ([i '(1 2 3)] [j '(15 7 19)] [k '(9 14 25)] #:when (< (+ i j k) 20)) 
          (printf "~a~n" (* i j k)))
-
 (define total 0)
 (my-for* ([i (range 1 60)] [j (range 1 60)] #:unless (= i j) [k (range 1 60)] #:unless (= k j) #:unless (= k i) #:unless (< 60 (* i j k)))
                            (set! total (add1 total)))

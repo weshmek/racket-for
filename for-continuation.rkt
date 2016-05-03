@@ -15,18 +15,27 @@
   (define lst (syntax->list stx))
   (define assigns (syntax->list (first (rest lst))))
   (define bodies (rest (rest lst)))
-  (define list-assign-sym (gensym))
+  #;(define list-assign-sym (gensym))
   (define (get-assigns ass-list acc)
     (cond
       [(empty? ass-list) (cons (reverse acc) (cons ass-list empty))]
-      [(or (symbol-equal? '#:when (first ass-list)) (symbol-equal? '#:unless (first ass-list)) (symbol-equal? '#:break (first ass-list))) (cons (reverse acc) (cons ass-list empty))]
+      [(or (symbol-equal? '#:when (first ass-list)) (symbol-equal? '#:unless (first ass-list)) (symbol-equal? '#:break (first ass-list)) (symbol-equal? '#:final (first ass-list))) 
+       (cons (reverse acc) (cons ass-list empty))]
       [else (get-assigns (rest ass-list) (cons (first ass-list) acc))]))
   (define k (gensym))
   (define f (gensym))
   #`(lambda (#,k)
       #,(if (empty? assigns)
-            #`(begin
-                #,@bodies)
+            (if (symbol-equal? '#:break (first bodies))
+                #`(cond
+                    [#,(first (rest bodies)) (#,k)]
+                    [else ((my-for-continuation () #,@(rest (rest bodies))) #,k)])
+                (if (symbol-equal? '#:final (first bodies))
+                    #`(cond
+                        [#,(first (rest bodies)) ((my-for-continuation () #,@(rest (rest bodies)) (#,k)) #,k)]
+                        [else ((my-for-continuation () #,@(rest (rest bodies))) #,k)])
+                    #`(begin
+                        #,@bodies)))
             (let ([ass-list (get-assigns assigns empty)])
               (if (empty? (first ass-list))
                   (let ([fass (first (first (rest ass-list)))]
@@ -42,6 +51,8 @@
                       [(symbol-equal? '#:break fass)
                        #`(cond [#,fond (#,k)]
                                [else ((my-for-continuation #,fest #,@bodies) #,k)])]
+                      [(symbol-equal? '#:final fass)
+                       #`((my-for-continuation #,fest #,@(rest (rest bodies)) (if #,(first (rest bodies)) (#,k) (void))) #,k)]
                       [else (error "Bad Syntax")]))
                   (let* ([names-exprs (map syntax->list (first ass-list))]
                          [temp-names (generate-temporaries names-exprs)]
@@ -55,7 +66,7 @@
                           (cond 
                             #,@tests
                             [else 
-                             (begin (let           #,assigns
+                             (begin (let        #,assigns
                                       ((my-for-continuation #,(first (rest ass-list))
                                                             #,@bodies) #,k))
                                     (#,f #,@rests))]))
@@ -70,7 +81,15 @@
 (call/cc (lambda (k) (void)))
 (my-for-4 
  ([i '(1 2 5)] #:break (> i 3) [j '(4 6 9)] #:break (> j 8))
+ (printf "~a~n" (+ i j)) (printf "~a~n" (- i j)))
+
+(my-for-4 
+ ([i '(1 3 5 8)] [j '(2 3 7 4)] #:final (> (* i j) 9)) #:break (> j 19)
  (printf "~a~n" (+ i j)))
 
-
- 
+(my-for-4 
+ ([i '(1 3 5 8)] [j '(2 3 7 4)] #:break (> (* i j) 9)) #:break (> j 19)
+ (printf "~a~n" (+ i j)))
+(my-for-4 
+ ([i '(1 3 5 8)] [j '(2 3 7 4)]) #:final (> (* i j) 9) #:break (> j 19)
+ (printf "~a~n" (+ i j)))
