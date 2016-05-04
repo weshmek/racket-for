@@ -31,9 +31,7 @@
                     [#,(first (rest bodies)) (#,k)]
                     [else ((my-for-continuation () #,@(rest (rest bodies))) #,k)])
                 (if (symbol-equal? '#:final (first bodies))
-                    #`(cond
-                        [#,(first (rest bodies)) ((my-for-continuation () #,@(rest (rest bodies)) (#,k)) #,k)]
-                        [else ((my-for-continuation () #,@(rest (rest bodies))) #,k)])
+                    #`((my-for-continuation () #,@(rest (rest bodies)) (if #,(first (rest bodies)) (#,k) (void))) #,k)
                     #`(begin
                         #,@bodies)))
             (let ([ass-list (get-assigns assigns empty)])
@@ -52,7 +50,7 @@
                        #`(cond [#,fond (#,k)]
                                [else ((my-for-continuation #,fest #,@bodies) #,k)])]
                       [(symbol-equal? '#:final fass)
-                       #`((my-for-continuation #,fest #,@(rest (rest bodies)) (if #,(first (rest bodies)) (#,k) (void))) #,k)]
+                       #`((my-for-continuation #,fest #,@bodies (if #,(first (rest bodies)) (#,k) (void))) #,k)]
                       [else (error "Bad Syntax")]))
                   (let* ([names-exprs (map syntax->list (first ass-list))]
                          [temp-names (generate-temporaries names-exprs)]
@@ -93,3 +91,28 @@
 (my-for-4 
  ([i '(1 3 5 8)] [j '(2 3 7 4)]) #:final (> (* i j) 9) #:break (> j 19)
  (printf "~a~n" (+ i j)))
+
+(define-syntax (my-for*-continuation stx)
+  (define lst (syntax->list stx))
+  (define empty '())
+  (define empty? (lambda (x) (equal? x empty)))
+  (define symbol-equal? (lambda (A x) (equal? A (syntax->datum x))))
+  (define first car)
+  (define rest cdr)
+  (define assigns (syntax->list (first (rest lst))))
+  (define bodies (rest (rest lst)))
+  
+  #`(lambda (k) 
+      #,(cond
+          [(empty? assigns) #`((my-for-continuation () #,@bodies) k)]
+          [(or (symbol-equal? '#:unless (first assigns)) (symbol-equal?  '#:when (first assigns)) (symbol-equal? '#:break (first assigns)) (symbol-equal? '#:final (first assigns))) #`((my-for-continuation (#,(first assigns) #,(first (rest assigns))) ((my-for*-continuation #,(rest (rest assigns)) #,@bodies) k)) k)]
+          [else #`((my-for-continuation (#,(first assigns)) ((my-for*-continuation #,(rest assigns) #,@bodies) k)) k)])))
+
+(define-syntax (my-for*-4 stx)
+  #`(call/cc (my-for*-continuation #,@(cdr (syntax->list stx)))))
+
+(my-for*-4 ([i '(1 2 4)] [j '(3 6 9)] [k '(7 14 21)]) 
+           (printf "~a ~a ~a~n" i j k))
+
+(my-for*-4 ([i '(1 2 4)] [j '(3 6 9)] [k '(7 14 21)]) #:final (< 19 (* i j k)) 
+           (printf "~a ~a ~a~n" i j k))
